@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>China 2026 Weather</title>
+    <style>
+    body {
+        font-family: Arial, Helvetica, sans-serif;
+        background-color: #eeeeee;
+        margin: 0 8px 8px 8px;
+        overflow-x: hidden;
+        overflow-y: scroll;
+    }
+    p, div, a, span, img {
+        padding: 0;
+        margin: 0;
+    }
+    .placetype {
+        opacity: 0.7;
+    }
+    .icon {
+        width: 12px;
+        height: 12px;
+        vertical-align: -1px;
+        fill: currentColor;
+    }
+    .o {
+        border-radius: 4px;
+        background-color: #ffffff;
+        width: 68px;
+        border: 2px solid;
+        margin: 2px 2px 2px 2px;
+        text-align: center;
+    }
+    .r {
+        border-color: #ff0000;
+        box-shadow: 0 0 3px brown;
+    }
+    .g {
+        border-color: limegreen;
+        box-shadow: 0 0 3px green;
+    }
+    .weather-summary img {
+        clear: both;
+        height: 64px;
+        width: 64px;
+    }
+    a:link {
+        text-decoration: none;
+        color: #000000;
+    }
+    a:visited {
+        text-decoration: none;
+        color: #000000;
+    }
+    a:active {
+        text-decoration: none;
+        color: #000000;
+    }
+    a:hover {
+        text-decoration: underline;
+        color: #222222;
+    }
+    .weather-summary {
+        position: relative;
+        z-index: 20;
+        background-color: #eeeeee;
+        font: 10px sans-serif;
+        color: #000000;
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        padding: 2px 0 0 0;
+    }
+    .location-link {
+        display: inline;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .lighter {
+        font-weight: 100;
+        font-size: 0.8em;
+    }
+    .row {
+        clear: both;
+    }
+
+    /* replaces the old MobileDetect jQuery script */
+    @media (max-width: 640px) {
+        .location-link {
+            font-size: 16px;
+        }
+        .row {
+            margin: 5px 0;
+        }
+    }
+
+    #throbber {
+        position:fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        z-index: 99;
+    }
+    #throbber p {
+        position:fixed;
+        top: 50%;
+        left: 50%;
+        margin-top: -128px;
+        margin-left: -128px;
+        text-align: center;
+        width: 160px;
+        height: 160px;
+        background-color: #ffffff;
+        color: #f4de04;
+        border: 5px solid #f4de04;
+        border-radius: 10px;
+    }
+    </style>
+</head>
+<body>
+    <div id="throbber">
+        <p><img src="images/loading.gif" alt=""><br>loading</p>
+    </div>
+    <script>
+    "use strict";
+
+    // openweathermap api key (same one the weather.boff.in site uses)
+    var APPID = "3cb460fd1b3976e9e5a069b2861dbdfb";
+
+    // inline icons replacing font-awesome
+    var ICON_PIN = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>';
+    var ICON_GLOBE = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+    var ICON_ARROW = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>';
+    var ICON_RETRY = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
+
+    // define the locations to search for.
+    // type is an icon indicating what sort of place this is
+    // latitude and longitude are the coordinates in decimal format
+    // (an openweathermap city "id" may also be supplied and is preferred)
+    // staying is an array of dates (format "MMM D") we sleep there - red ring.
+    // visiting is a similar array of day trips - green ring.
+    //
+    // China 2026 trip: 8th October to 5th November.  Places are listed in
+    // trip order.
+    var locations = {
+        "Shanghai" : {
+            "name"      : "Shanghai",
+            "type"      : ICON_PIN,
+            "latitude"  : "31.2304",
+            "longitude" : "121.4737",
+            "staying"   : [ "Oct 9", "Oct 10", "Oct 11", "Oct 12", "Oct 13" ],
+            "visiting"  : [ "Oct 9", "Oct 10", "Oct 11", "Oct 12", "Oct 13" ]
+        },
+        "Shanghai Disneyland" : {
+            "name"      : "Shanghai Disneyland",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "31.1443",
+            "longitude" : "121.6570",
+            "visiting"  : [ "Oct 10" ]
+        },
+        "Lujiazui (Pudong)" : {
+            "name"      : "Lujiazui (Pudong)",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "31.2397",
+            "longitude" : "121.4998",
+            "visiting"  : [ "Oct 11" ]
+        },
+        "Xintiandi and the French Concession" : {
+            "name"      : "Xintiandi and the French Concession",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "31.2200",
+            "longitude" : "121.4700",
+            "visiting"  : [ "Oct 12" ]
+        },
+        "Zhujiajiao Water Town" : {
+            "name"      : "Zhujiajiao Water Town",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "31.1085",
+            "longitude" : "121.0544",
+            "visiting"  : [ "Oct 13" ]
+        },
+        "Guangfulin Relic Park" : {
+            "name"      : "Guangfulin Relic Park",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "31.0330",
+            "longitude" : "121.1830",
+            "visiting"  : [ "Oct 13" ]
+        },
+        "Beijing" : {
+            "name"      : "Beijing",
+            "type"      : ICON_PIN,
+            "latitude"  : "39.9042",
+            "longitude" : "116.4074",
+            "staying"   : [ "Oct 14", "Oct 15", "Oct 16", "Oct 17", "Oct 18" ],
+            "visiting"  : [ "Oct 14", "Oct 15", "Oct 16", "Oct 17", "Oct 18", "Oct 19" ]
+        },
+        "Mutianyu Great Wall" : {
+            "name"      : "Mutianyu Great Wall",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "40.4300",
+            "longitude" : "116.5700",
+            "visiting"  : [ "Oct 16" ]
+        },
+        "Xi'an" : {
+            "name"      : "Xi'an",
+            "type"      : ICON_PIN,
+            "latitude"  : "34.3416",
+            "longitude" : "108.9398",
+            "staying"   : [ "Oct 19", "Oct 20" ],
+            "visiting"  : [ "Oct 19", "Oct 20" ]
+        },
+        "Terracotta Army" : {
+            "name"      : "Terracotta Army",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "34.3842",
+            "longitude" : "109.2785",
+            "visiting"  : [ "Oct 20" ]
+        },
+        "Chengdu" : {
+            "name"      : "Chengdu",
+            "type"      : ICON_PIN,
+            "latitude"  : "30.5728",
+            "longitude" : "104.0668",
+            "staying"   : [ "Oct 21", "Oct 22", "Oct 23" ],
+            "visiting"  : [ "Oct 21", "Oct 22", "Oct 23" ]
+        },
+        "Panda Valley" : {
+            "name"      : "Panda Valley",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "30.9700",
+            "longitude" : "103.6300",
+            "visiting"  : [ "Oct 22" ]
+        },
+        "Chongqing" : {
+            "name"      : "Chongqing",
+            "type"      : ICON_PIN,
+            "latitude"  : "29.5630",
+            "longitude" : "106.5516",
+            "staying"   : [ "Oct 24", "Oct 25", "Oct 26", "Oct 27" ],
+            "visiting"  : [ "Oct 24", "Oct 25", "Oct 26", "Oct 27" ]
+        },
+        "Wulong Karst and Three Bridges" : {
+            "name"      : "Wulong Karst and Three Bridges",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "29.3251",
+            "longitude" : "107.7602",
+            "visiting"  : [ "Oct 26" ]
+        },
+        "Wulingyuan" : {
+            "name"      : "Wulingyuan",
+            "type"      : ICON_PIN,
+            "latitude"  : "29.3200",
+            "longitude" : "110.5500",
+            "staying"   : [ "Oct 28", "Oct 29" ],
+            "visiting"  : [ "Oct 28", "Oct 29", "Oct 30" ]
+        },
+        "Zhangjiajie" : {
+            "name"      : "Zhangjiajie",
+            "type"      : ICON_PIN,
+            "latitude"  : "29.1170",
+            "longitude" : "110.4793",
+            "staying"   : [ "Oct 30", "Oct 31" ],
+            "visiting"  : [ "Oct 30", "Oct 31" ]
+        },
+        "Hong Kong" : {
+            "name"      : "Hong Kong",
+            "type"      : ICON_PIN,
+            "latitude"  : "22.2988",
+            "longitude" : "114.1722",
+            "staying"   : [ "Nov 1", "Nov 2", "Nov 3" ],
+            "visiting"  : [ "Nov 1", "Nov 2", "Nov 3", "Nov 4" ]
+        },
+        "Big Buddha (Lantau Island)" : {
+            "name"      : "Big Buddha (Lantau Island)",
+            "type"      : ICON_GLOBE,
+            "latitude"  : "22.2528",
+            "longitude" : "113.9057",
+            "visiting"  : [ "Nov 3" ]
+        }
+    };
+
+    // define months and days of the week
+    var months = [ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" ];
+    var dow = [ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" ];
+
+    // convert the long weather description into one that is
+    // 12 characters or less
+    function convertDescription(str) {
+        var short = {
+            "clear sky": "Clear Skies", "sky is clear": "Clear Skies",
+            "few clouds": "Few Clouds", "scattered clouds": "Sct Clouds",
+            "broken clouds": "Brkn Clouds", "shower rain": "Showers",
+            "rain": "Rain", "thunderstorm": "Thunderstorm", "snow": "Snow",
+            "mist": "Mist", "smoke": "Smoke", "haze": "Haze", "fog": "Fog",
+            "sand": "Sand", "dust": "Dust", "squalls": "Squalls",
+            "tornado": "Tornado", "overcast clouds": "Overcast",
+            "light rain": "Light Rain", "moderate rain": "Mod Rain",
+            "heavy intensity rain": "Heavy Rain",
+            "very heavy rain": "V Heavy Rain", "extreme rain": "Extreme Rain",
+            "freezing rain": "Frz Rain", "light snow": "Light Snow",
+            "heavy snow": "Heavy Snow", "sleet": "Sleet",
+            "light intensity drizzle": "Lt Drizzle", "drizzle": "Drizzle",
+            "heavy intensity drizzle": "Hvy Drizzle", "drizzle rain": "Drizzle/Rain",
+            "light intensity drizzle rain": "Lt Drizzle",
+            "heavy intensity drizzle rain": "Drizzle/Rain",
+            "shower rain and drizzle": "Drizzle/Rain",
+            "heavy shower rain and drizzle": "Drizzle/Rain",
+            "shower drizzle": "Drizzle",
+            "light intensity shower rain": "Lgt Showers",
+            "heavy intensity shower rain": "Hvy Showers",
+            "ragged shower rain": "Showers", "shower sleet": "Sleet Shower",
+            "light rain and snow": "Rain / Snow", "rain and snow": "Rain / Snow",
+            "light shower snow": "Light Snow", "shower snow": "Snow Showers",
+            "heavy shower snow": "Snow Showers", "sand, dust whirls": "Dust Whirls",
+            "volcanic ash": "Volcanic Ash", "tropical storm": "Tropical Stm",
+            "hurricane": "Hurricane", "cold": "Cold", "hot": "Hot",
+            "windy": "Windy", "hail": "Hail", "calm": "Calm",
+            "light breeze": "Lgt Breeze", "gentle breeze": "Breeze",
+            "moderate breeze": "Mod Breeze", "fresh breeze": "Fresh Breeze",
+            "strong breeze": "S Breeze", "high wind, near gale": "High Winds",
+            "gale": "Gales", "severe gale": "Severe Gales", "storm": "Storm",
+            "violent storm": "Violent Stm"
+        };
+        var thunder = /thunderstorm/;
+        if ( thunder.test(str) ) { return "Thunderstorm"; }
+        return short[str] || "Unknown";
+    }
+
+    // converts the openweathermap icons into my favourite ones (returns
+    // the filename in images/weather/ without the .png extension)
+    function getWeatherIcon(code, img) {
+        code = Number(code);
+        if ( code >= 200 && code < 300 ) { return "35"; }
+        if ( code >= 300 && code < 400 ) {
+            if ( code == 312 || code == 313 || code == 314 || code == 321 ) { return img.indexOf("n") >= 0 ? "39" : "45"; }
+            if ( code == 302 || code == 311 ) { return "12"; }
+            if ( code == 310 ) { return "11"; }
+            return "40";
+        }
+        if ( code >= 500 && code < 600 ) {
+            if ( code == 500 || code == 520 || code == 521 || code == 531 ) { return img.indexOf("n") >= 0 ? "39" : "45"; }
+            if ( code == 501 ) { return "11"; }
+            if ( code == 502 || code == 503 || code == 504 || code == 522 ) { return "12"; }
+            if ( code == 511 ) { return "10"; }
+            return "40";
+        }
+        if ( code >= 600 && code < 700 ) {
+            if ( code == 600 ) { return "13"; }
+            if ( code == 601 ) { return "14"; }
+            if ( code == 602 ) { return "15"; }
+            if ( code == 611 || code == 612 ) { return "5"; }
+            if ( code == 615 || code == 616 ) { return "7"; }
+            if ( code == 620 || code == 621 || code == 622 ) { return "16"; }
+            return "14";
+        }
+        if ( code >= 700 && code < 800 ) {
+            if ( code == 701 || code == 741 ) { return "20"; }
+            if ( code == 711 ) { return "22"; }
+            if ( code == 721 ) { return "21"; }
+            if ( code == 771 || code == 781 ) { return "23"; }
+            return "19";
+        }
+        if ( code >= 800 && code < 900 ) {
+            if ( code == 800 ) { return img.indexOf("n") >= 0 ? "31" : "32"; }
+            if ( code == 801 ) { return img.indexOf("n") >= 0 ? "33" : "34"; }
+            if ( code == 802 ) { return img.indexOf("n") >= 0 ? "29" : "30"; }
+            if ( code == 803 ) { return img.indexOf("n") >= 0 ? "27" : "28"; }
+            if ( code == 804 ) { return "26"; }
+        }
+        if ( code == 900 || code == 901 || code == 902 || (code >= 960 && code <= 962) ) { return "1"; }
+        if ( code == 903 ) { return "25"; }
+        if ( code == 904 ) { return "36"; }
+        if ( code == 905 || (code >= 952 && code <= 959) ) { return "23"; }
+        if ( code == 906 ) { return "6"; }
+        if ( code == 951 ) { return "32"; }
+        return "NA";
+    }
+
+    // convert a temperature (in kelvin) into an HTML colour
+    function getColour(kelvin) {
+        var f = Math.round((kelvin - 273.15) * 9 / 5 + 32);
+        if ( f > 100 ) { return "DD0000"; }
+        if ( f > 90 ) { return "FF3300"; }
+        if ( f > 80 ) { return "FF5500"; }
+        if ( f > 70 ) { return "FF9933"; }
+        if ( f > 60 ) { return "FFCC33"; }
+        if ( f > 50 ) { return "FFFF99"; }
+        if ( f > 40 ) { return "66CC66"; }
+        if ( f > 30 ) { return "99CCFF"; }
+        if ( f > 20 ) { return "3399FF"; }
+        if ( f > 10 ) { return "9966FF"; }
+        return "CC99CC";
+    }
+
+    // given "0-360" returns the nearest cardinal direction "N/NE/E/SE/S/SW/W/NW/N"
+    function getCardinal(angle) {
+        var directions = 8;
+        var degree = 360 / directions;
+        angle = angle + degree / 2;
+        var names = [ "N", "NE", "E", "SE", "S", "SW", "W", "NW" ];
+        for ( var i = 0; i < directions; i++ ) {
+            if ( angle >= i * degree && angle < (i + 1) * degree ) { return names[i]; }
+        }
+        return "N";
+    }
+
+    // small helpers
+    function toTitleCase(str) {
+        return str.replace(/\w\S*/g, function (t) { return t.charAt(0).toUpperCase() + t.substr(1).toLowerCase(); });
+    }
+    function cleanName(str) {
+        return str.replace(/\W/g, "_");
+    }
+    function escapeHtml(str) {
+        return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    }
+    // does the displayed date (eg "Sat Oct 31") end with any of the
+    // special dates in dateArr (eg "Oct 31")?
+    function matchesDate(displayDate, dateArr) {
+        if ( !Array.isArray(dateArr) ) { return false; }
+        return dateArr.some(function (d) { return displayDate.endsWith(d); });
+    }
+
+    function apiUrl(place) {
+        if ( place.id ) {
+            return "https://api.openweathermap.org/data/2.5/forecast/daily?id=" + place.id + "&cnt=16&mode=json&APPID=" + APPID;
+        }
+        return "https://api.openweathermap.org/data/2.5/forecast/daily?lat=" + place.latitude + "&lon=" + place.longitude + "&cnt=16&mode=json&APPID=" + APPID;
+    }
+
+    // fetch with up to three attempts, half a second apart
+    function fetchWeather(place) {
+        var attempts = 0;
+        function tryOnce() {
+            attempts++;
+            return fetch(apiUrl(place))
+                .then(function (r) {
+                    if ( !r.ok ) { throw new Error("HTTP " + r.status); }
+                    return r.json();
+                })
+                .catch(function () {
+                    if ( attempts < 3 ) {
+                        return new Promise(function (res) { setTimeout(res, 500); }).then(tryOnce);
+                    }
+                    return null;
+                });
+        }
+        return tryOnce();
+    }
+
+    function drawRow(data, loc) {
+        var place = locations[loc];
+        var titlePlace = toTitleCase(loc);
+        var placename = cleanName(loc);
+        var rowid = "weather-" + placename + "-" + cleanName(place.longitude) + "-" + cleanName(place.latitude);
+        var row = document.getElementById(rowid);
+        if ( !row ) { return; }
+
+        // link title (the tooltip may note the weather is recorded nearby)
+        var tt = "Weather in " + titlePlace;
+        if ( data && data.city && titlePlace != toTitleCase(data.city.name) ) {
+            tt += ", recorded nearby in " + data.city.name;
+        }
+
+        // the row heading: name, place type icon, optional hotel/webcam links
+        var head = '<p class="location-link">' +
+            '<a ' + (data && data.city ? 'href="https://openweathermap.org/city/' + data.city.id + '" ' : "") +
+            'title="' + escapeHtml(tt) + '">' + ICON_ARROW + titlePlace + '</a>' +
+            '&nbsp;<span class="placetype" title="Pin indicates places we are staying&#10;Globe indicates somewhere we are visiting">' + place.type + '</span>';
+
+        if ( place.hotel ) {
+            head += '&nbsp;<a href="' + escapeHtml(place.hotel) + '" title="Click to see where we are staying in ' + titlePlace + '"><span id="hotel-icon-' + placename + '">&#9760;</span></a>';
+        }
+        if ( place.webcams ) {
+            head += '&nbsp;<a href="' + escapeHtml(place.webcams) + '" title="Click to see webcams near ' + titlePlace + '">&#9788;</a>';
+        }
+        head += "</p>";
+
+        if ( !data || !data.list ) {
+            // nothing came back after all retries
+            var fallback = "";
+            if ( place.id ) {
+                fallback = '<a href="https://openweathermap.org/city/' + place.id + '" title="Weather not found">click here</a>';
+            } else {
+                fallback = '<a href="#" onclick="location.reload();return false;" title="Try again">' + ICON_RETRY + " click here</a> to try again";
+            }
+            row.innerHTML = head + '<p class="location-link lighter">&nbsp;no weather data near here was found; try again later or ' + fallback + "</p>";
+            return;
+        }
+
+        // today's epoch seconds - days in the past are not drawn
+        var myEpoch = new Date().setUTCHours(0, 0, 0, 0) / 1000;
+
+        var boxes = "";
+        for ( var j = 0; j < data.list.length; j++ ) {
+            var item = data.list[j];
+            var d = new Date(item.dt * 1000);
+            var mydate = dow[d.getDay()] + " " + months[d.getMonth()] + " " + d.getDate();
+            if ( item.dt <= myEpoch ) { continue; }
+
+            // staying gets a red ring (checked first, so it wins), otherwise
+            // visiting gets a green ring
+            var cls = "o";
+            if ( matchesDate(mydate, place.staying) ) { cls += " r"; }
+            else if ( matchesDate(mydate, place.visiting) ) { cls += " g"; }
+
+            var windMph = Math.round(item.speed * 2.236936);
+            var windDir = getCardinal(item.deg);
+            var tip = toTitleCase(item.weather[0].description) + "\nHumidity: " + item.humidity + "%" +
+                      "\n" + item.clouds + "% cloud cover" + "\n" + windMph + "mph " + windDir + " wind.";
+            var alt = item.weather[0].description + ", humidity: " + item.humidity + "%, " +
+                      item.clouds + "% cloud cover, " + windMph + "mph " + windDir + " wind.";
+            var icon = getWeatherIcon(item.weather[0].id, item.weather[0].icon);
+
+            var hiC = Math.round(item.temp.day - 273.15);
+            var loC = Math.round(item.temp.night - 273.15);
+            var hiCell = ( item.temp.day != item.temp.night )
+                ? '<div style="background:#' + getColour(item.temp.day) + '">' + hiC + "&deg;C / " + Math.round(hiC * 9 / 5 + 32) + "&deg;F</div>"
+                : "<div>&nbsp;</div>";
+
+            boxes += '<div class="' + cls + '" title="' + escapeHtml(tip) + '">' + mydate +
+                '<img src="images/weather/' + icon + '.png" alt="' + escapeHtml(alt) + '">' +
+                "<span>" + convertDescription(item.weather[0].description) + "</span>" +
+                hiCell +
+                '<div style="border-bottom-right-radius:3px;border-bottom-left-radius:3px;background:#' + getColour(item.temp.night) + '">' +
+                loC + "&deg;C / " + Math.round(loC * 9 / 5 + 32) + "&deg;F</div></div>";
+        }
+
+        row.innerHTML = head + '<div class="weather-summary">' + boxes + "</div>";
+    }
+
+    // run once the page has loaded: create a row per location, then fill
+    // each row as its forecast arrives
+    document.addEventListener("DOMContentLoaded", function () {
+        var names = Object.keys(locations);
+
+        names.forEach(function (loc) {
+            var place = locations[loc];
+            var row = document.createElement("div");
+            row.className = "row";
+            row.id = "weather-" + cleanName(loc) + "-" + cleanName(place.longitude) + "-" + cleanName(place.latitude);
+            document.body.appendChild(row);
+        });
+
+        var fetches = names.map(function (loc) {
+            return fetchWeather(locations[loc]).then(function (data) {
+                console.log(loc + (data ? " was downloaded" : " was NOT downloaded"));
+                drawRow(data, loc);
+            });
+        });
+
+        // hide the throbber when every row has been attempted
+        Promise.all(fetches).then(function () {
+            document.getElementById("throbber").style.display = "none";
+        });
+    });
+    </script>
+
+</body>
+</html>
